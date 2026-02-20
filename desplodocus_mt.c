@@ -12,8 +12,8 @@
 #define OPTIONS "i:p:o:nt:vh"
 #define MICROSECONDS_PER_SECOND 1000000.0
 char** read_file(char *, int*);
-void compare_and_concrypt(char **, char**, int, int, int, FILE *);
-int crack_one_hash(char*, char**, int, FILE*);
+void compare_and_concrypt(char **, char**, int, int, int, FILE *, bool);
+int crack_one_hash(char*, char**, int, FILE*, bool verbose);
 void* twork(void* tdata);
 
 struct worker_args {
@@ -28,6 +28,7 @@ struct thread_data{
 	int next_indx;
 	pthread_mutex_t lock;
 	FILE* output;
+	bool verbose;
 };
 
 void* twork(void* tdata){
@@ -49,7 +50,7 @@ void* twork(void* tdata){
 		curr_indx = shared->next_indx;
 		shared->next_indx++;
 		pthread_mutex_unlock(&shared->lock);
-		if(crack_one_hash(shared->hash_array[curr_indx], shared->password_array, shared->password_count, shared->output) == 1){
+		if(crack_one_hash(shared->hash_array[curr_indx], shared->password_array, shared->password_count, shared->output, shared->verbose) == 1){
 			++num_cracked;
 		}
 		else{
@@ -68,7 +69,7 @@ void* twork(void* tdata){
 
 
 
-int crack_one_hash(char* hash, char** password_arr, int passw_count, FILE* out){
+int crack_one_hash(char* hash, char** password_arr, int passw_count, FILE* out, bool verbose){
 	const char * salt_val = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 	char * result;
 	char * password;
@@ -84,6 +85,9 @@ int crack_one_hash(char* hash, char** password_arr, int passw_count, FILE* out){
 				memset(&data, 0, sizeof(data));
 				password = password_arr[k];
 				result = crypt_rn(password, salt, &data, sizeof(data));
+				if(verbose){
+					fprintf(out, "Checking hash: %s to password: %s\n", hash, password);
+				}
 				if(strcmp(hash, result +2) == 0){
 					found = true;
 					fprintf(out,"cracked: %s : %s\n", hash, password);
@@ -100,7 +104,7 @@ int crack_one_hash(char* hash, char** password_arr, int passw_count, FILE* out){
 }
 
 
-void compare_and_concrypt(char ** inpt_arr, char** pass_arr, int pass_count, int i_count, int num_threads, FILE* output){
+void compare_and_concrypt(char ** inpt_arr, char** pass_arr, int pass_count, int i_count, int num_threads, FILE* output, bool verbose){
 		
 	struct thread_data shared_data;
 	long tid =0;
@@ -112,6 +116,7 @@ void compare_and_concrypt(char ** inpt_arr, char** pass_arr, int pass_count, int
 	shared_data.password_count = pass_count;
 	shared_data.next_indx = 0;
 	shared_data.output = output;
+	shared_data.verbose = verbose;
 
 	threads = malloc(num_threads *sizeof(pthread_t));
 	worker_data = malloc(num_threads *sizeof(struct worker_args));
@@ -250,7 +255,7 @@ int main(int argc, char*argv[]){
 	}
 
 	//try each hash in ifile and compare to the password in pfile
-	compare_and_concrypt(ifile_arr, pfile_arr, pcount, icount, threadcnt, out);
+	compare_and_concrypt(ifile_arr, pfile_arr, pcount, icount, threadcnt, out, is_verbose);
 
 
 	//freeing all allocated memory
